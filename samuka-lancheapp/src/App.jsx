@@ -699,21 +699,58 @@ function CartDrawer({ cart, open, onClose, storeOpen }) {
   };
   const valid = !errors.name && !errors.address && !errors.payment;
 
-  const finish = () => {
+  const finish = async () => {
     setTried(true);
-    if (!valid || !cart.lines.length) return;
-    const msg = buildWhatsAppMessage({
-      lines: cart.lines,
-      total: cart.total,
-      mode,
-      name,
-      address,
-      payment,
-      change,
-      notes,
-    });
-    const url = `https://wa.me/${STORE.whatsapp}?text=${encodeURIComponent(msg)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+    if (!name.trim() || !address.trim() || !payment) {
+      return;
+    }
+
+    // Se for pagamento online (Pix Online ou Cartão Online)
+    if (payment.includes("Online")) {
+      try {
+        // Mostra um feedback visual de carregamento se desejar
+        const response = await fetch('/api/create-preference', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: cart.items.map(item => ({
+              title: item.name,
+              unit_price: item.price,
+              quantity: item.quantity
+            }))
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.init_point) {
+          // Redireciona o cliente para o Checkout Pro oficial do Mercado Pago
+          window.location.href = data.init_point;
+          return;
+        } else {
+          alert("Erro ao gerar link de pagamento. Tente novamente.");
+        }
+      } catch (error) {
+        console.error("Erro no pagamento:", error.message);
+        alert("Erro de conexão com o sistema de pagamento.");
+      }
+      return;
+    }
+
+    // Fluxo normal para pagamento na entrega / balcão (WhatsApp)
+    const text = encodeURIComponent(
+      `*Novo Pedido - Samuka Lanches & Cia*\n\n` +
+      `*Cliente:* ${name}\n` +
+      `*Modo:* ${mode === "entrega" ? "Entrega" : "Retirada no Balcão"}\n` +
+      `*Endereço:* ${address}\n` +
+      `*Pagamento:* ${payment}${payment === "Dinheiro" && change ? ` (Troco para: ${change})` : ""}\n\n` +
+      `*Itens:*\n` +
+      cart.items.map(i => `- ${i.quantity}x ${i.name} (${brl(i.price * i.quantity)})`).join("\n") +
+      `\n\n*Total:* ${brl(cart.total)}` +
+      (notes ? `\n*Observações:* ${notes}` : "")
+    );
+
+    window.open(`https://wa.me/5511999999999?text=${text}`, "_blank");
   };
 
   return (
@@ -826,14 +863,17 @@ function CartDrawer({ cart, open, onClose, storeOpen }) {
 
               <fieldset>
                 <legend className="mb-2 text-sm font-semibold text-[#0B2545]">Forma de pagamento</legend>
-                <div className="flex gap-2">
-                  <OptionButton selected={payment === "Pix"} onClick={() => setPayment("Pix")}>
-                    Pix
+                <div className="grid grid-cols-2 gap-2">
+                  <OptionButton selected={payment === "Pix Online"} onClick={() => setPayment("Pix Online")}>
+                    Pix Online
+                  </OptionButton>
+                  <OptionButton selected={payment === "Cartão Online"} onClick={() => setPayment("Cartão Online")}>
+                    Cartão Online
                   </OptionButton>
                   <OptionButton selected={payment === "Dinheiro"} onClick={() => setPayment("Dinheiro")}>
                     Dinheiro
                   </OptionButton>
-                  <OptionButton selected={payment === "Cartão"} onClick={() => setPayment("Cartão")}>
+                  <OptionButton selected={payment === "Cartão na Entrega"} onClick={() => setPayment("Cartão na Entrega")}>
                     {mode === "entrega" ? "Cartão na Entrega" : "Cartão no Balcão"}
                   </OptionButton>
                 </div>
@@ -856,17 +896,28 @@ function CartDrawer({ cart, open, onClose, storeOpen }) {
               </fieldset>
             </div>
 
-            <div className="border-t border-[#0B2545]/10 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
+          <div className="border-t border-[#0B2545]/10 bg-white px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4">
               <div className="mb-3 flex items-center justify-between">
                 <span className="text-sm font-semibold text-[#0B2545]/70">Total</span>
                 <span className="font-display text-2xl font-extrabold text-[#0B2545]">{brl(cart.total)}</span>
               </div>
+              
+              {/* <--- SUBSTITUA O BOTÃO ANTIGO AQUI POR ESTE NOVO: ---> */}
               <button
                 onClick={finish}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[#16A34A] py-4 text-base font-extrabold text-white shadow-lg transition hover:bg-[#15803D] active:scale-[0.98]"
+                className={`flex w-full items-center justify-center gap-2 rounded-2xl py-4 text-base font-extrabold text-white shadow-lg transition active:scale-[0.98] ${
+                  payment.includes("Online") 
+                    ? "bg-[#1E40AF] hover:bg-[#1D4ED8]" 
+                    : "bg-[#16A34A] hover:bg-[#15803D]"
+                }`}
               >
-                <MessageCircle size={22} /> Finalizar Pedido no WhatsApp
+                {payment.includes("Online") ? (
+                  <>Pagar com Mercado Pago</>
+                ) : (
+                  <><MessageCircle size={22} /> Finalizar Pedido no WhatsApp</>
+                )}
               </button>
+
             </div>
           </>
         )}
