@@ -699,7 +699,7 @@ function CartDrawer({ cart, open, onClose, storeOpen }) {
   };
   const valid = !errors.name && !errors.address && !errors.payment;
 
-  const finish = async () => {
+const finish = async () => {
     setTried(true);
     if (!name.trim() || !address.trim() || !payment) {
       return;
@@ -708,15 +708,14 @@ function CartDrawer({ cart, open, onClose, storeOpen }) {
     // Se for pagamento online (Pix Online ou Cartão Online)
     if (payment.includes("Online")) {
       try {
-        // Mostra um feedback visual de carregamento se desejar
         const response = await fetch('/api/create-preference', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            items: cart.items.map(item => ({
+            items: cart.lines.map(({ item, qty }) => ({
               title: item.name,
               unit_price: item.price,
-              quantity: item.quantity
+              quantity: qty
             }))
           })
         });
@@ -745,7 +744,7 @@ function CartDrawer({ cart, open, onClose, storeOpen }) {
       `*Endereço:* ${address}\n` +
       `*Pagamento:* ${payment}${payment === "Dinheiro" && change ? ` (Troco para: ${change})` : ""}\n\n` +
       `*Itens:*\n` +
-      cart.items.map(i => `- ${i.quantity}x ${i.name} (${brl(i.price * i.quantity)})`).join("\n") +
+      cart.lines.map(({ item, qty }) => `- ${qty}x ${item.name} (${brl(item.price * qty)})`).join("\n") +
       `\n\n*Total:* ${brl(cart.total)}` +
       (notes ? `\n*Observações:* ${notes}` : "")
     );
